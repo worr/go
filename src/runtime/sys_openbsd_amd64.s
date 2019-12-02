@@ -80,53 +80,6 @@ TEXT runtime·thrwakeup(SB),NOSPLIT,$0
 	MOVL	AX, ret+16(FP)
 	RET
 
-// Exit the entire program (like C exit)
-TEXT runtime·exit(SB),NOSPLIT,$-8
-	MOVL	code+0(FP), DI		// arg 1 - exit status
-	MOVL	$1, AX			// sys_exit
-	SYSCALL
-	MOVL	$0xf1, 0xf1		// crash
-	RET
-
-// func exitThread(wait *uint32)
-TEXT runtime·exitThread(SB),NOSPLIT,$0-8
-	MOVQ	wait+0(FP), DI		// arg 1 - notdead
-	MOVL	$302, AX		// sys___threxit
-	SYSCALL
-	MOVL	$0xf1, 0xf1		// crash
-	JMP	0(PC)
-
-TEXT runtime·open(SB),NOSPLIT,$-8
-	MOVQ	name+0(FP), DI		// arg 1 pathname
-	MOVL	mode+8(FP), SI		// arg 2 flags
-	MOVL	perm+12(FP), DX		// arg 3 mode
-	MOVL	$5, AX
-	SYSCALL
-	JCC	2(PC)
-	MOVL	$-1, AX
-	MOVL	AX, ret+16(FP)
-	RET
-
-TEXT runtime·closefd(SB),NOSPLIT,$-8
-	MOVL	fd+0(FP), DI		// arg 1 fd
-	MOVL	$6, AX
-	SYSCALL
-	JCC	2(PC)
-	MOVL	$-1, AX
-	MOVL	AX, ret+8(FP)
-	RET
-
-TEXT runtime·read(SB),NOSPLIT,$-8
-	MOVL	fd+0(FP), DI		// arg 1 fd
-	MOVQ	p+8(FP), SI		// arg 2 buf
-	MOVL	n+16(FP), DX		// arg 3 count
-	MOVL	$3, AX
-	SYSCALL
-	JCC	2(PC)
-	NEGQ	AX			// caller expects negative errno
-	MOVL	AX, ret+24(FP)
-	RET
-
 // func pipe() (r, w int32, errno int32)
 TEXT runtime·pipe(SB),NOSPLIT,$0-12
 	LEAQ	r+0(FP), DI
@@ -142,33 +95,6 @@ TEXT runtime·pipe2(SB),NOSPLIT,$0-20
 	MOVL	$101, AX
 	SYSCALL
 	MOVL	AX, errno+16(FP)
-	RET
-
-TEXT runtime·write1(SB),NOSPLIT,$-8
-	MOVQ	fd+0(FP), DI		// arg 1 - fd
-	MOVQ	p+8(FP), SI		// arg 2 - buf
-	MOVL	n+16(FP), DX		// arg 3 - nbyte
-	MOVL	$4, AX			// sys_write
-	SYSCALL
-	JCC	2(PC)
-	NEGQ	AX			// caller expects negative errno
-	MOVL	AX, ret+24(FP)
-	RET
-
-TEXT runtime·usleep(SB),NOSPLIT,$16
-	MOVL	$0, DX
-	MOVL	usec+0(FP), AX
-	MOVL	$1000000, CX
-	DIVL	CX
-	MOVQ	AX, 0(SP)		// tv_sec
-	MOVL	$1000, AX
-	MULL	DX
-	MOVQ	AX, 8(SP)		// tv_nsec
-
-	MOVQ	SP, DI			// arg 1 - rqtp
-	MOVQ	$0, SI			// arg 2 - rmtp
-	MOVL	$91, AX			// sys_nanosleep
-	SYSCALL
 	RET
 
 TEXT runtime·getthrid(SB),NOSPLIT,$0-4
@@ -320,17 +246,6 @@ TEXT runtime·munmap(SB),NOSPLIT,$0
 	MOVL	$0xf1, 0xf1		// crash
 	RET
 
-TEXT runtime·madvise(SB),NOSPLIT,$0
-	MOVQ	addr+0(FP), DI		// arg 1 - addr
-	MOVQ	n+8(FP), SI		// arg 2 - len
-	MOVL	flags+16(FP), DX	// arg 3 - behav
-	MOVQ	$75, AX			// sys_madvise
-	SYSCALL
-	JCC	2(PC)
-	MOVL	$-1, AX
-	MOVL	AX, ret+24(FP)
-	RET
-
 TEXT runtime·sigaltstack(SB),NOSPLIT,$-8
 	MOVQ	new+0(FP), DI		// arg 1 - nss
 	MOVQ	old+8(FP), SI		// arg 2 - oss
@@ -414,3 +329,58 @@ TEXT runtime·setNonblock(SB),NOSPLIT,$0-4
 	MOVL	$92, AX // fcntl
 	SYSCALL
 	RET
+
+// Called by runtime·asmcgocall or runtime·cgocall.
+// NOT USING GO CALLING CONVENTION.
+TEXT runtime·asmsysobsd6(SB),NOSPLIT,$0
+  PUSHQ DI
+  MOVQ  libcall_fn(DI), AX
+  MOVQ  libcall_args(DI), R11
+  MOVQ  libcall_args(DI), R10
+
+  get_tls(CX)
+  MOVQ  g(CX), BX
+  CMPQ  BX, $0
+  JEQ skiperrno1
+  MOVQ  g_m(BX), BX
+  MOVQ  (m_mOS+mOS_perrno)(BX), DX
+  CMPQ  DX, $0
+  JEQ skiperrno1
+  MOVL  $0, 0(DX)
+
+skiperrno1:
+  CMPQ  R11, $0
+  JEQ skipargs
+  // Load 6 args into corresponding registers
+  MOVQ  0(R11), DI
+  MOVQ  4(R11), SI
+  MOVQ  8(R11), DX
+  MOVQ  12(R11), CX
+  MOVQ  16(R11), R8
+  MOVQ  20(R11), R9
+
+skipargs:
+  // Call obsd func
+  CALL AX
+
+  // Return result
+  POPQ  DI
+  MOVQ  AX, libcall_r1(DI)
+  MOVQ  DX, libcall_r2(DI)
+
+  get_tls(CX)
+  // get goroutine context
+  MOVQ  g(CX), BX
+  CMPQ  BX, $0
+  JEQ skiperrno2
+  MOVQ  g_m(BX), BX
+  // get errno offset and store addr to errno in AX
+  MOVQ  (m_mOS+mOS_perrno)(BX), AX
+  // if addr is 0, skip loading errno
+  CMPQ  AX, $0
+  JEQ skiperrno2
+  MOVL  0(AX), AX
+  MOVQ  AX, libcall_err(DI)
+
+skiperrno2:
+  RET

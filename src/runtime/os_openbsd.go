@@ -12,6 +12,138 @@ import (
 
 type mOS struct {
 	waitsemacount uint32
+	perrno        uintptr
+}
+
+type libcFunc uintptr
+
+//go:linkname asmsysobsd6x runtime.asmsysobsd6
+var asmsysobsd6x libcFunc // name to take addr of asmsysobsd6
+
+func asmsysobsd6() // declared for vet; do NOT call
+
+//go:nowritebarrier
+//go:nosplit
+func syscall0(fn *libcFunc) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n:    0,
+		args: uintptr(unsafe.Pointer(&fn)), // it's unused but must be non-nil, otherwise crashes
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
+}
+
+//go:nowritebarrier
+//go:nosplit
+func syscall1(fn *libcFunc, r1 uintptr) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n:    1,
+		args: uintptr(unsafe.Pointer(&r1)),
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
+}
+
+//go:nowritebarrier
+//go:nosplit
+func syscall2(fn *libcFunc, r1, r2 uintptr) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n:    2,
+		args: uintptr(unsafe.Pointer(&r1)),
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
+}
+
+//go:nowritebarrier
+//go:nosplit
+func syscall3(fn *libcFunc, r1, r2, r3 uintptr) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n:    3,
+		args: uintptr(unsafe.Pointer(&r1)),
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
 }
 
 //go:noescape
@@ -245,6 +377,16 @@ func mpreinit(mp *m) {
 func minit() {
 	getg().m.procid = uint64(getthrid())
 	minitSignals()
+	miniterrno()
+}
+
+// Needed to init the location of errno per-thread
+//go:nosplit
+//go:nowritebarrier
+func miniterrno() {
+	mp := getg().m
+	r, _ := syscall0(&__errno)
+	mp.perrno = r
 }
 
 // Called from dropm to undo the effect of an minit.
