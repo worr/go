@@ -177,3 +177,18 @@ type keventt struct {
 	data   int64
 	udata  *byte
 }
+
+type pthreadattr struct {
+	stack_addr       unsafe.Pointer
+	stack_size       uint
+	guard_size       uint
+	detach_state     int32
+	contention_scope int32
+	sched_policy     int32
+	sched_param      sched_param
+	sched_inherit    int32
+}
+
+type sched_param struct {
+	sched_priority int32
+}

@@ -1,0 +1,20 @@
+GENERATOR:
+  PackageName: openbsd
+  PackageLicense: |
+    Copyright 2019 The Go Authors. All rights reserved.
+    Use of this source code is governed by a BSD-style
+    license that can be found in the LICENSE file.
+  Includes: ["pthread"]
+PARSER:
+  IncludePaths: ["/usr/include", "/usr/src/lib/libc/include"]
+  SourcesPaths: ["pthread.h", "thread_private.h"]
+  Arch: "x86_64"
+TRANSLATOR:
+  ConstRules:
+    defines: expand
+  Rules:
+    global:
+      - {action: accept, from: "^pthread_attr_t$"}
+      - {action: accept, from: "^sched_param$"}
+    type:
+      - {action: replace, from: "pthread_attr_t", to: "pthreadattr"}

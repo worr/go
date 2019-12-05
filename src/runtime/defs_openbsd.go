@@ -22,6 +22,8 @@ package runtime
 #include <sys/signal.h>
 #include <errno.h>
 #include <signal.h>
+#include <pthread.h>
+#include <fcntl.h>
 */
 import "C"
 
@@ -125,6 +127,3 @@ type Timeval C.struct_timeval
 type Itimerval C.struct_itimerval
 
 type KeventT C.struct_kevent
-
-type SizeT C.size_t
-type SsizeT C.ssize_t

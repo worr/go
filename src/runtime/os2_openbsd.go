@@ -7,12 +7,12 @@ package runtime
 import "unsafe"
 
 const (
-	_SS_DISABLE  = 4
-	_SIG_BLOCK   = 1
-	_SIG_UNBLOCK = 2
-	_SIG_SETMASK = 3
-	_NSIG        = 33
-	_SI_USER     = 0
+	_SS_DISABLE              = 4
+	_SIG_BLOCK               = 1
+	_SIG_UNBLOCK             = 2
+	_SIG_SETMASK             = 3
+	_NSIG                    = 33
+	_SI_USER                 = 0
 )
 
 //go:cgo_import_dynamic __errno __errno "libc.so"
@@ -25,6 +25,13 @@ const (
 //go:cgo_import_dynamic libc_madvise madvise "libc.so"
 //go:cgo_import_dynamic libc___threxit __threxit "libc.so"
 
+//go:cgo_import_dynamic libpthread_attr_init pthread_attr_init "libpthread.so"
+//go:cgo_import_dynamic libpthread_attr_destroy pthread_attr_destroy "libpthread.so"
+//go:cgo_import_dynamic libpthread_attr_setstack pthread_attr_setstack "libpthread.so"
+//go:cgo_import_dynamic libpthread_attr_setstacksize pthread_attr_setstacksize "libpthread.so:
+//go:cgo_import_dynamic libpthread_attr_setdetachstate pthread_attr_setdetachstate "libpthread.so"
+//go:cgo_import_dynamic libpthread_create pthread_create "libpthread.so"
+
 //go:linkname __errno __errno
 //go:linkname libc_read libc_read
 //go:linkname libc_close libc_close
@@ -34,6 +41,13 @@ const (
 //go:linkname libc_open libc_open
 //go:linkname libc_madvise libc_madvise
 //go:linkname libc___threxit libc___threxit
+
+//go:linkname libpthread_attr_init libpthread_attr_init
+//go:linkname libpthread_attr_destroy libpthread_attr_destroy
+//go:linkname libpthread_attr_setstack libpthread_attr_setstack
+//go:linkname libpthread_attr_setstacksize libpthread_attr_setstacksize
+//go:linkname libpthread_attr_setdetachstate libpthread_attr_setdetachstate
+//go:linkname libpthread_create libpthread_create
 
 var (
 	__errno        libcFunc
@@ -45,6 +59,12 @@ var (
 	libc_open      libcFunc
 	libc_madvise   libcFunc
 	libc___threxit libcFunc
+
+	libpthread_attr_init         libcFunc
+	libpthread_attr_destroy      libcFunc
+	libpthread_attr_setstack     libcFunc
+	libpthread_attr_setstacksize libcFunc
+	libpthread_create            libcFunc
 )
 
 //go:nosplit
@@ -107,4 +127,24 @@ func madvise(addr unsafe.Pointer, n uintptr, flags int32) int32 {
 
 func exitThread(wait *uint32) {
 	syscall1(&libc___threxit, uintptr(unsafe.Pointer(wait)))
+}
+
+func pthread_attr_init(attr *pthreadattr) int32 {
+	r, _ := syscall1(&libpthread_attr_init, uintptr(unsafe.Pointer(attr)))
+	return int32(r)
+}
+
+func pthread_attr_destroy(attr *pthreadattr) int32 {
+	r, _ := syscall1(&libpthread_attr_destroy, uintptr(unsafe.Pointer(attr)))
+	return int32(r)
+}
+
+func pthread_attr_setstack(attr *pthreadattr, stackaddr unsafe.Pointer, stacksize int32) int32 {
+	r, _ := syscall3(&libpthread_attr_setstack, uintptr(unsafe.Pointer(attr)), uintptr(stackaddr), uintptr(stacksize))
+	return int32(r)
+}
+
+func pthread_attr_setdetachstate(attr *pthreadattr, detachstate int32) int32 {
+	r, _ := syscall3(&libpthread_attr_setdetachstate, uintptr(unsafe.Pointer(attr)), uintptr(detachstate))
+	return int32(r)
 }

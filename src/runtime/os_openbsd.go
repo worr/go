@@ -315,20 +315,32 @@ func semawakeup(mp *m) {
 	}
 }
 
+const _PTHREAD_CREATE_DETACHED = 1
+
 // May run with m.p==nil, so write barriers are not allowed.
 //go:nowritebarrier
 func newosproc(mp *m) {
-	stk := unsafe.Pointer(mp.g0.stack.hi)
+	stk := unsafe.Pointer(mp.g0.stack.hi - sys.PtrSize)
 	if false {
 		print("newosproc stk=", stk, " m=", mp, " g=", mp.g0, " id=", mp.id, " ostk=", &mp, "\n")
 	}
 
+	var attr pthreadattr
+	if err := pthread_attr_init(&attr); err != 0 {
+		print("runtime: failed to allocate thread attributes. errno=", -err, ")\n")
+		throw("runtime.newosproc")
+	}
+
 	// Stack pointer must point inside stack area (as marked with MAP_STACK),
 	// rather than at the top of it.
-	param := tforkt{
-		tf_tcb:   unsafe.Pointer(&mp.tls[0]),
-		tf_tid:   nil, // minit will record tid
-		tf_stack: uintptr(stk) - sys.PtrSize,
+	if err := pthread_attr_setstack(&attr, stk, uintptr(stk) - mp.g0.stack.lo); err != 0 {
+		print("runtime: failed to set thread thread stack. errno=", -err, ")\n")
+		throw("runtime.newosproc")
+	}
+
+	if err := pthread_attr_setdetachstate(&attr, _PTHREAD_CREATE_DETACHED); err != 0 {
+		print("runtime: failed to set thread thread detached state. errno=", -err, ")\n")
+		throw("runtime.newosproc")
 	}
 
 	var oset sigset
