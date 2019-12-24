@@ -6,7 +6,6 @@ package runtime
 
 import (
 	"runtime/internal/atomic"
-	"runtime/internal/sys"
 	"unsafe"
 )
 
@@ -146,6 +145,99 @@ func syscall3(fn *libcFunc, r1, r2, r3 uintptr) (r, err uintptr) {
 	return c.r1, c.err
 }
 
+//go:nowritebarrier
+//go:nosplit
+func syscall4(fn *libcFunc, r1, r2, r3, r4 uintptr) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n:    4,
+		args: uintptr(unsafe.Pointer(&r1)),
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
+}
+
+//go:nowritebarrier
+//go:nosplit
+func syscall5(fn *libcFunc, r1, r2, r3, r4, r5 uintptr) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n:    5,
+		args: uintptr(unsafe.Pointer(&r1)),
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
+}
+
+//go:nowritebarrier
+//go:nosplit
+func syscall6(fn *libcFunc, r1, r2, r3, r4, r5, r6 uintptr) (r, err uintptr) {
+	gp := getg()
+	mp := gp.m
+	resetLibcall := true
+	if mp.libcallsp == 0 {
+		mp.libcallg.set(gp)
+		mp.libcallpc = getcallerpc()
+		// sp must be the last, because once async cpu profiler finds
+		// all three values to be non-zero, it will use them
+		mp.libcallsp = getcallersp()
+	} else {
+		resetLibcall = false // See comment in sys_darwin.go:libcCall
+	}
+
+	c := libcall{
+		fn:   uintptr(unsafe.Pointer(fn)),
+		n: 6,
+		args: uintptr(unsafe.Pointer(&r1)),
+	}
+
+	asmcgocall(unsafe.Pointer(&asmsysobsd6x), unsafe.Pointer(&c))
+
+	if resetLibcall {
+		mp.libcallsp = 0
+	}
+
+	return c.r1, c.err
+}
+
 //go:noescape
 func setitimer(mode int32, new, old *itimerval)
 
@@ -174,29 +266,11 @@ func sigprocmask(how int32, new, old *sigset) {
 //go:noescape
 func sysctl(mib *uint32, miblen uint32, out *byte, size *uintptr, dst *byte, ndst uintptr) int32
 
-func raiseproc(sig uint32)
-
-func getthrid() int32
-func thrkill(tid int32, sig int)
-
-//go:noescape
-func tfork(param *tforkt, psize uintptr, mm *m, gg *g, fn uintptr) int32
-
-//go:noescape
-func thrsleep(ident uintptr, clock_id int32, tsp *timespec, lock uintptr, abort *uint32) int32
-
-//go:noescape
-func thrwakeup(ident uintptr, n int32) int32
-
-func osyield()
-
 func kqueue() int32
 
 //go:noescape
 func kevent(kq int32, ch *keventt, nch int32, ev *keventt, nev int32, ts *timespec) int32
 
-func pipe() (r, w int32, errno int32)
-func pipe2(flags int32) (r, w int32, errno int32)
 func closeonexec(fd int32)
 func setNonblock(fd int32)
 
@@ -296,7 +370,10 @@ func semasleep(ns int64) int32 {
 		// be examined [...] immediately before blocking. If that int
 		// is non-zero then __thrsleep() will immediately return EINTR
 		// without blocking."
-		ret := thrsleep(uintptr(unsafe.Pointer(&_g_.m.waitsemacount)), _CLOCK_MONOTONIC, tsp, 0, &_g_.m.waitsemacount)
+		// This cast is safe, since the only signficant values are 0
+		// or not 0
+		waitsemacct := int32(_g_.m.waitsemacount)
+		ret := thrsleep(unsafe.Pointer(&_g_.m.waitsemacount), _CLOCK_MONOTONIC, tsp, nil, &waitsemacct)
 		if ret == _EWOULDBLOCK {
 			return -1
 		}
@@ -306,7 +383,8 @@ func semasleep(ns int64) int32 {
 //go:nosplit
 func semawakeup(mp *m) {
 	atomic.Xadd(&mp.waitsemacount, 1)
-	ret := thrwakeup(uintptr(unsafe.Pointer(&mp.waitsemacount)), 1)
+	waitsemacount := int32(mp.waitsemacount)
+	ret := thrwakeup(unsafe.Pointer(&waitsemacount), 1)
 	if ret != 0 && ret != _ESRCH {
 		// semawakeup can be called on signal stack.
 		systemstack(func() {
@@ -317,23 +395,22 @@ func semawakeup(mp *m) {
 
 const _PTHREAD_CREATE_DETACHED = 1
 
+func newthread(mp *m) uint32
+
 // May run with m.p==nil, so write barriers are not allowed.
 //go:nowritebarrier
 func newosproc(mp *m) {
-	stk := unsafe.Pointer(mp.g0.stack.hi - sys.PtrSize)
-	if false {
-		print("newosproc stk=", stk, " m=", mp, " g=", mp.g0, " id=", mp.id, " ostk=", &mp, "\n")
-	}
+	var (
+		thread pthread
+		attr   pthreadattr
+	)
 
-	var attr pthreadattr
 	if err := pthread_attr_init(&attr); err != 0 {
 		print("runtime: failed to allocate thread attributes. errno=", -err, ")\n")
 		throw("runtime.newosproc")
 	}
 
-	// Stack pointer must point inside stack area (as marked with MAP_STACK),
-	// rather than at the top of it.
-	if err := pthread_attr_setstack(&attr, stk, uintptr(stk) - mp.g0.stack.lo); err != 0 {
+	if err := pthread_attr_setstacksize(&attr, 0x200000); err != 0 {
 		print("runtime: failed to set thread thread stack. errno=", -err, ")\n")
 		throw("runtime.newosproc")
 	}
@@ -345,7 +422,8 @@ func newosproc(mp *m) {
 
 	var oset sigset
 	sigprocmask(_SIG_SETMASK, &sigset_all, &oset)
-	ret := tfork(&param, unsafe.Sizeof(param), mp, mp.g0, funcPC(mstart))
+	//ret := tfork(&param, unsafe.Sizeof(param), mp, mp.g0, funcPC(mstart))
+	ret := pthread_create(&thread, &attr, funcPC(newthread), unsafe.Pointer(mp))
 	sigprocmask(_SIG_SETMASK, &oset, nil)
 
 	if ret < 0 {

@@ -12,113 +12,23 @@
 
 #define CLOCK_MONOTONIC	$3
 
-// int32 tfork(void *param, uintptr psize, M *mp, G *gp, void (*fn)(void));
-TEXT runtime·tfork(SB),NOSPLIT,$32
+TEXT runtime·newthread(SB),NOSPLIT,$0
+    MOVQ    mp+0(FP), R8    // arg 1 - m
+    MOVQ    m_g0(R8), R9    // g
 
-	// Copy mp, gp and fn off parent stack for use by child.
-	MOVQ	mm+16(FP), R8
-	MOVQ	gg+24(FP), R9
-	MOVQ	fn+32(FP), R12
+    // hook up g & m
+    get_tls(CX)
+    MOVQ    R8, g_m(R9)
+    MOVQ    R9, g(CX)
 
-	MOVQ	param+0(FP), DI
-	MOVQ	psize+8(FP), SI
-	MOVL	$8, AX			// sys___tfork
-	SYSCALL
+    CLD
 
-	// Return if tfork syscall failed.
-	JCC	4(PC)
-	NEGQ	AX
-	MOVL	AX, ret+40(FP)
-	RET
+    CALL    runtime·stackcheck(SB)
+    CALL    runtime·mstart(SB)
 
-	// In parent, return.
-	CMPL	AX, $0
-	JEQ	3(PC)
-	MOVL	AX, ret+40(FP)
-	RET
-
-	// Set FS to point at m->tls.
-	LEAQ	m_tls(R8), DI
-	CALL	runtime·settls(SB)
-
-	// In child, set up new stack.
-	get_tls(CX)
-	MOVQ	R8, g_m(R9)
-	MOVQ	R9, g(CX)
-	CALL	runtime·stackcheck(SB)
-
-	// Call fn
-	CALL	R12
-
-	// It shouldn't return. If it does, exit
-	MOVQ	$0, DI			// arg 1 - notdead
-	MOVL	$302, AX		// sys___threxit
-	SYSCALL
-	JMP	-3(PC)			// keep exiting
-
-TEXT runtime·osyield(SB),NOSPLIT,$0
-	MOVL	$298, AX		// sys_sched_yield
-	SYSCALL
-	RET
-
-TEXT runtime·thrsleep(SB),NOSPLIT,$0
-	MOVQ	ident+0(FP), DI		// arg 1 - ident
-	MOVL	clock_id+8(FP), SI		// arg 2 - clock_id
-	MOVQ	tsp+16(FP), DX		// arg 3 - tp
-	MOVQ	lock+24(FP), R10		// arg 4 - lock
-	MOVQ	abort+32(FP), R8		// arg 5 - abort
-	MOVL	$94, AX			// sys___thrsleep
-	SYSCALL
-	MOVL	AX, ret+40(FP)
-	RET
-
-TEXT runtime·thrwakeup(SB),NOSPLIT,$0
-	MOVQ	ident+0(FP), DI		// arg 1 - ident
-	MOVL	n+8(FP), SI		// arg 2 - n
-	MOVL	$301, AX		// sys___thrwakeup
-	SYSCALL
-	MOVL	AX, ret+16(FP)
-	RET
-
-// func pipe() (r, w int32, errno int32)
-TEXT runtime·pipe(SB),NOSPLIT,$0-12
-	LEAQ	r+0(FP), DI
-	MOVL	$263, AX
-	SYSCALL
-	MOVL	AX, errno+8(FP)
-	RET
-
-// func pipe2(flags int32) (r, w int32, errno int32)
-TEXT runtime·pipe2(SB),NOSPLIT,$0-20
-	LEAQ	r+8(FP), DI
-	MOVL	flags+0(FP), SI
-	MOVL	$101, AX
-	SYSCALL
-	MOVL	AX, errno+16(FP)
-	RET
-
-TEXT runtime·getthrid(SB),NOSPLIT,$0-4
-	MOVL	$299, AX		// sys_getthrid
-	SYSCALL
-	MOVL	AX, ret+0(FP)
-	RET
-
-TEXT runtime·thrkill(SB),NOSPLIT,$0-16
-	MOVL	tid+0(FP), DI		// arg 1 - tid
-	MOVQ	sig+8(FP), SI		// arg 2 - signum
-	MOVQ	$0, DX			// arg 3 - tcb
-	MOVL	$119, AX		// sys_thrkill
-	SYSCALL
-	RET
-
-TEXT runtime·raiseproc(SB),NOSPLIT,$16
-	MOVL	$20, AX			// sys_getpid
-	SYSCALL
-	MOVQ	AX, DI			// arg 1 - pid
-	MOVL	sig+0(FP), SI		// arg 2 - signum
-	MOVL	$122, AX		// sys_kill
-	SYSCALL
-	RET
+    XORL    AX, AX
+    MOVL    AX, ret+8(FP)
+    RET
 
 TEXT runtime·setitimer(SB),NOSPLIT,$-8
 	MOVL	mode+0(FP), DI		// arg 1 - which
@@ -255,14 +165,8 @@ TEXT runtime·sigaltstack(SB),NOSPLIT,$-8
 	MOVL	$0xf1, 0xf1		// crash
 	RET
 
-// set tls base to DI
+// needed for asm_amd64.s
 TEXT runtime·settls(SB),NOSPLIT,$0
-	// adjust for ELF: wants to use -8(FS) for g
-	ADDQ	$8, DI
-	MOVQ	$329, AX		// sys___settcb
-	SYSCALL
-	JCC	2(PC)
-	MOVL	$0xf1, 0xf1		// crash
 	RET
 
 TEXT runtime·sysctl(SB),NOSPLIT,$0

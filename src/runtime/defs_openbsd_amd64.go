@@ -192,3 +192,13 @@ type pthreadattr struct {
 type sched_param struct {
 	sched_priority int32
 }
+
+type pthread struct {
+	flags          uint32
+	flags_lock     int32
+	retval         unsafe.Pointer
+	fn             *func(arg0 unsafe.Pointer) unsafe.Pointer
+	arg            unsafe.Pointer
+	name           [32]byte
+	delayed_cancel int32
+}

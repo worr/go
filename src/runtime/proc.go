@@ -1099,8 +1099,8 @@ func mstart() {
 
 	// Exit this thread.
 	switch GOOS {
-	case "windows", "solaris", "illumos", "plan9", "darwin", "aix":
-		// Windows, Solaris, illumos, Darwin, AIX and Plan 9 always system-allocate
+	case "windows", "solaris", "illumos", "plan9", "darwin", "aix", "openbsd":
+		// Windows, Solaris, illumos, Darwin, AIX, OpenBSD and Plan 9 always system-allocate
 		// the stack, but put it in _g_.stack before mstart,
 		// so the logic above hasn't set osStack yet.
 		osStack = true
