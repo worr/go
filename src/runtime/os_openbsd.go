@@ -225,7 +225,7 @@ func syscall6(fn *libcFunc, r1, r2, r3, r4, r5, r6 uintptr) (r, err uintptr) {
 
 	c := libcall{
 		fn:   uintptr(unsafe.Pointer(fn)),
-		n: 6,
+		n:    6,
 		args: uintptr(unsafe.Pointer(&r1)),
 	}
 
@@ -401,8 +401,9 @@ func newthread(mp *m) uint32
 //go:nowritebarrier
 func newosproc(mp *m) {
 	var (
-		thread pthread
-		attr   pthreadattr
+		thread    pthread
+		attr      pthreadattr
+		stacksize uintptr
 	)
 
 	if err := pthread_attr_init(&attr); err != 0 {
@@ -410,10 +411,17 @@ func newosproc(mp *m) {
 		throw("runtime.newosproc")
 	}
 
-	if err := pthread_attr_setstacksize(&attr, 0x200000); err != 0 {
-		print("runtime: failed to set thread thread stack. errno=", -err, ")\n")
+	// default new thread stacksize on 64bit openbsd
+	if err := pthread_attr_setstacksize(&attr, 0x80000); err != 0 {
+		print("runtime: failed to get thread thread stack. errno=", -err, ")\n")
 		throw("runtime.newosproc")
 	}
+
+	if err := pthread_attr_getstack(&attr, unsafe.Pointer(&mp.g0.stack.lo), &stacksize); err != 0 {
+		print("runtime: failed to get thread thread stack size. errno=", -err, ")\n")
+		throw("runtime.newosproc")
+	}
+	mp.g0.stack.hi = mp.g0.stack.lo + stacksize
 
 	if err := pthread_attr_setdetachstate(&attr, _PTHREAD_CREATE_DETACHED); err != 0 {
 		print("runtime: failed to set thread thread detached state. errno=", -err, ")\n")

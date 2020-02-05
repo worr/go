@@ -865,9 +865,15 @@ loop:
 TEXT runtime·stackcheck(SB), NOSPLIT, $0-0
 	get_tls(CX)
 	MOVQ	g(CX), AX
+  MOVQ  (g_stack+stack_hi)(AX), R10
+  MOVQ  (g_stack+stack_lo)(AX), R11
 	CMPQ	(g_stack+stack_hi)(AX), SP
-	JHI	2(PC)
-	CALL	runtime·abort(SB)
+  JHI 3(PC)
+  INT $3
+loop:
+  JMP loop
+	//JHI	2(PC)
+	//CALL	runtime·abort(SB)
 	CMPQ	SP, (g_stack+stack_lo)(AX)
 	JHI	2(PC)
 	CALL	runtime·abort(SB)

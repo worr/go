@@ -37,7 +37,9 @@ const (
 //go:cgo_import_dynamic libpthread_attr_init pthread_attr_init "libpthread.so"
 //go:cgo_import_dynamic libpthread_attr_destroy pthread_attr_destroy "libpthread.so"
 //go:cgo_import_dynamic libpthread_attr_setstack pthread_attr_setstack "libpthread.so"
+//go:cgo_import_dynamic libpthread_attr_getstack pthread_attr_getstack "libpthread.so"
 //go:cgo_import_dynamic libpthread_attr_setstacksize pthread_attr_setstacksize "libpthread.so:
+//go:cgo_import_dynamic libpthread_attr_getstacksize pthread_attr_getstacksize "libpthread.so:
 //go:cgo_import_dynamic libpthread_attr_setdetachstate pthread_attr_setdetachstate "libpthread.so"
 //go:cgo_import_dynamic libpthread_create pthread_create "libpthread.so"
 
@@ -63,7 +65,9 @@ const (
 //go:linkname libpthread_attr_init libpthread_attr_init
 //go:linkname libpthread_attr_destroy libpthread_attr_destroy
 //go:linkname libpthread_attr_setstack libpthread_attr_setstack
+//go:linkname libpthread_attr_getstack libpthread_attr_getstack
 //go:linkname libpthread_attr_setstacksize libpthread_attr_setstacksize
+//go:linkname libpthread_attr_getstacksize libpthread_attr_getstacksize
 //go:linkname libpthread_attr_setdetachstate libpthread_attr_setdetachstate
 //go:linkname libpthread_create libpthread_create
 
@@ -90,7 +94,9 @@ var (
 	libpthread_attr_init           libcFunc
 	libpthread_attr_destroy        libcFunc
 	libpthread_attr_setstack       libcFunc
+	libpthread_attr_getstack       libcFunc
 	libpthread_attr_setstacksize   libcFunc
+	libpthread_attr_getstacksize   libcFunc
 	libpthread_attr_setdetachstate libcFunc
 	libpthread_create              libcFunc
 )
@@ -127,7 +133,7 @@ func usleep(usec uint32) {
 		tv_nsec: int64((usec % 1000000) * 1000),
 	}
 
-	syscall1(&libc_nanosleep, uintptr(unsafe.Pointer(ts)))
+	syscall2(&libc_nanosleep, uintptr(unsafe.Pointer(ts)), 0)
 }
 
 //go:nosplit
@@ -225,13 +231,23 @@ func pthread_attr_destroy(attr *pthreadattr) int32 {
 	return int32(r)
 }
 
-func pthread_attr_setstack(attr *pthreadattr, stackaddr unsafe.Pointer, stacksize int32) int32 {
+func pthread_attr_setstack(attr *pthreadattr, stackaddr unsafe.Pointer, stacksize uintptr) int32 {
 	r, _ := syscall3(&libpthread_attr_setstack, uintptr(unsafe.Pointer(attr)), uintptr(stackaddr), uintptr(stacksize))
 	return int32(r)
 }
 
-func pthread_attr_setstacksize(attr *pthreadattr, stacksize int32) int32 {
+func pthread_attr_getstack(attr *pthreadattr, stackaddr unsafe.Pointer, stacksize *uintptr) int32 {
+	r, _ := syscall3(&libpthread_attr_getstack, uintptr(unsafe.Pointer(attr)), uintptr(stackaddr), uintptr(unsafe.Pointer(stacksize)))
+	return int32(r)
+}
+
+func pthread_attr_setstacksize(attr *pthreadattr, stacksize uintptr) int32 {
 	r, _ := syscall2(&libpthread_attr_setstacksize, uintptr(unsafe.Pointer(attr)), uintptr(stacksize))
+	return int32(r)
+}
+
+func pthread_attr_getstacksize(attr *pthreadattr, stacksize *uintptr) int32 {
+	r, _ := syscall2(&libpthread_attr_getstacksize, uintptr(unsafe.Pointer(attr)), uintptr(unsafe.Pointer(stacksize)))
 	return int32(r)
 }
 

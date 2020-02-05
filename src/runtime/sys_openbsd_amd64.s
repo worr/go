@@ -18,8 +18,16 @@ TEXT runtime·newthread(SB),NOSPLIT,$0
 
     // hook up g & m
     get_tls(CX)
-    MOVQ    R8, g_m(R9)
     MOVQ    R9, g(CX)
+    MOVQ    R8, g_m(R9)
+
+    MOVQ    SP, AX
+    MOVQ    AX, (g_stack+stack_hi)(R9)
+    SUBQ    $(64*1024), AX
+    MOVQ    AX, (g_stack+stack_lo)(R9)
+    ADDQ    $const__StackGuard, AX
+    MOVQ    AX, g_stackguard0(R9)
+    MOVQ    AX, g_stackguard1(R9)
 
     CLD
 
@@ -257,11 +265,11 @@ skiperrno1:
   JEQ skipargs
   // Load 6 args into corresponding registers
   MOVQ  0(R11), DI
-  MOVQ  4(R11), SI
-  MOVQ  8(R11), DX
-  MOVQ  12(R11), CX
-  MOVQ  16(R11), R8
-  MOVQ  20(R11), R9
+  MOVQ  8(R11), SI
+  MOVQ  16(R11), DX
+  MOVQ  24(R11), CX
+  MOVQ  32(R11), R8
+  MOVQ  40(R11), R9
 
 skipargs:
   // Call obsd func
